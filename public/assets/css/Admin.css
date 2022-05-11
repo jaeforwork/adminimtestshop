@@ -1,0 +1,47 @@
+/*Admin ∆‰¿Ã¡ˆ */
+
+/*index Page */
+@media (min-width: 992px) {
+.AdminContentWidth{width:1200px;}
+.AdminMenuWarp{float:left;border-bottom:1px solid #e4e9f1;height:78px;}
+.AdminMenuWarp li{margin-top:20px;}
+.AdminLeftMenuWarp {width:150px;margin-top:10px;float: left !important;margin-right:10px;margin-right: -15px;margin-left: -15px}
+.AdminMainWarp{width:900px;float:right;margin:10px 0 0 0;}
+}
+
+.button7 {
+  font: bold 11px Arial;
+  text-decoration: none;
+  background-color: #EEEEEE;
+  color: #333333;
+  
+  border-top: 1px solid #CCCCCC;
+  border-right: 1px solid #333333;
+  border-bottom: 1px solid #333333;
+  border-left: 1px solid #CCCCCC;
+  
+}
+
+.dropdown {
+    position: relative
+}
+.dropdown-toggle:focus {
+    outline: 0
+}
+
+
+
+.TopMenu{
+    font-size: 12px;
+    line-height: 20px;
+    color: #5486bc;
+    white-space: nowrap;
+    outline: 1;
+	padding:10px 10px 10px 10px;
+}
+.AdminMenuWarp ul.nav li.dropdown:hover{
+	background:#eeeeee;
+	border-radius:5px;
+	
+	
+}

@@ -1,0 +1,587 @@
+<?php
+
+defined('BASEPATH') OR exit('');
+
+class Valid_checker {
+    static $WHITE_HOSTS=array("naver.com","gmail.com","daum.net","hanmail.net","nate.com");
+    private $DB;
+    
+    function setDB($DB){
+        $this->DB=$DB;
+    }
+    
+    
+    
+    function valid_password($pwd){
+        $pattern="/[^\s*]{6,}$/";
+        return preg_match($pattern, $pwd);
+    }
+    
+    function valid_mobile_phone($phone){
+        $pattern="/^010[1-9]{1}[0-9]{7}$/";
+        return preg_match($pattern, $phone);
+    }
+    
+    function valid_birth($birth){
+        if(!preg_match('/^(19[0-9][0-9]|20\d{2})(0[0-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$/', $birth) || $birth >= date("Ymd")){
+            
+            return FALSE;
+        }
+        
+        return TRUE;
+    }
+    
+    function valid_email($email){
+        if (function_exists('idn_to_ascii') && preg_match('#\A([^@]+)@(.+)\z#', $email, $matches))
+        {
+            $domain = defined('INTL_IDNA_VARIANT_UTS46')
+            ? idn_to_ascii($matches[2], 0, INTL_IDNA_VARIANT_UTS46)
+            : idn_to_ascii($matches[2]);
+            
+            if ($domain !== FALSE)
+            {
+                $email = $matches[1].'@'.$domain;
+            }
+        }
+        
+        $r= (bool) filter_var($email, FILTER_VALIDATE_EMAIL);
+        
+        if($r){
+            $email_host=strtolower(explode("@", $email)[1]);
+            $email_id=explode("@", $email)[0];
+            
+            $pos=strpos($email_id, "+");
+            if($email_host=="gmail.com" && $pos!==false){
+                
+                return FALSE;
+            }
+            $pos=strpos($email_id, ".");
+            if($email_host=="gmail.com" && $pos!==false){     
+                
+                return FALSE;
+            }
+            return $r;
+        }else{
+            
+            return $r;
+        }
+    }
+    
+    function is_white_emailhost($email){
+        $email_info=explode("@", $email);
+        if(count($email_info)!=2){
+            return FALSE;
+        }
+        $email_host=strtolower($email_info[1]);
+        if(!in_array( $email_host,Valid_checker::$WHITE_HOSTS)){
+            return FALSE;
+        }
+        return TRUE;
+    }
+    
+    
+    function is_denied_user_id($userid){
+        $query_result=$this->DB->select("count(*) as cnt")->from("denied_user_id")->where(array("user_id"=>$userid))->get()->row();        
+        return $query_result->cnt>0;
+    }
+    
+    function is_invalid_nick_name($nick_name){
+        //$query_result=$this->DB->select("count(*) as cnt")->from("invalid_nick_name")->where(array("nick_name"=>$nick_name))->get()->row();
+        $query_result=$this->DB->select("data")->from("_block_words")->where(array("id"=>"nick_name"))->get()->row();
+        if(!$query_result)return FALSE;
+        $block_list=explode(",",$query_result->data);       
+        
+        return in_array($nick_name, $block_list);
+    }
+    
+    
+    function has_block_word($id,$content){
+        $query_result=$this->DB->select("data")->from("_block_words")->where(array("id"=>$id))->get()->row();
+        if(!$query_result)return FALSE;
+        $block_list=explode(",",$query_result->data);
+        foreach($block_list as $word){
+            if(stripos($content,$word)!==false){
+                return $word;
+            }
+        }
+        return false;
+    }
+    
+    
+    
+    function get_denied_user_id_count(){        
+        $query_result=$this->DB->select("count(*) as cnt")->from("denied_user_id")->get();
+        return $query_result->row()->cnt;
+    }
+    
+    function get_denied_user_id_list($start,$size){        
+        $query_result=$this->DB->select("*")->from("denied_user_id")->order_by("list_order")->limit($size,$start)->get();        
+        return $query_result->result();
+    }
+    function get_denied_nick_name_list($start,$size){        
+        $query_result=$this->DB->select("*")->from("denied_nick_name")->order_by("idx","desc")->limit($size,$start)->get();
+        return $query_result->result();
+    }
+    
+    
+    /**
+     * 게시글  또는 댓글 금지어 체크
+     * @param unknown $content
+     * @param unknown $param
+     * @return boolean
+     */
+    function invalid_word($content){
+        return $this->word_check($content, "invalid_word");
+    }
+    
+    function invalid_word_share($content){
+        return $this->word_check($content, "invalid_word_share");
+    }
+    
+    /**
+     * 검색어 금지어 체크
+     * @param unknown $val
+     * @param unknown $param
+     * @return boolean
+     */
+    function invalid_search($val){
+        return $this->word_check($val, "invalid_search");
+    }
+    
+    private function word_check($content,$table){
+        $word_list=$this->DB->select("word")->from($table)->get()->result();
+        $pattern="";
+        foreach($word_list as $word){
+            if(!$pattern){
+                $pattern=$word->word;
+            }else{
+                $pattern=$pattern."|".$word->word;
+            }
+        }
+        if(!empty($word_list)){
+            $pattern="[".$pattern."]";
+            preg_match($pattern, $content, $matches);
+            if(isset($matches[0])){
+                $this->DB->set("hit","hit+1",FALSE)->set("latest_hit",date("YmdHis"))->where("word",$matches[0])->update($table);
+                return $matches[0];
+            }
+        }
+        return FALSE;
+    }
+    
+    
+    
+    function valid_tag($tag,$max_tag_count=5){
+        
+        $tag=trim($tag);
+        $first=substr($tag,0,1);
+        if($first!="#"){
+            return -1;
+        }
+        
+        $taglist=explode("#", $tag);
+        
+        foreach($taglist as $val){
+            $val=trim($val);
+            if($val){
+                //preg_match("/^[가-힣a-zA-z0-9_]{1,20}$/u", $val,$matches);
+                preg_match("/[\s#\&\+\%@=\/\\\:;,'\"\^`~\|\!\?\*$#<>()\[\]\{\}]/iu", $val,$matches);
+                if($matches){
+                    //ajaxReturn("N", "올바른 태그를 입력 하세요.");
+                    return -1;
+                }
+                $temp[]=$val;
+            }
+        }
+        
+        if(count($temp)>$max_tag_count){
+            //ajaxReturn("N", "5개 이하로 태그를 작성 하세요.");
+            return -5;
+            
+        }
+        
+        if(!empty($temp)){
+            for($i=0;$i<count($temp)-1 ; $i++){
+                $a=$temp[$i];                
+                if(!$a)continue;
+                if(mb_strlen($a)>20){
+                    return -2;
+                }
+                for($j=$i+1;$j<count($temp) ; $j++){
+                    $b=$temp[$j];
+                    if(!$b)continue;
+                    
+                    if(strtolower($a)==strtolower($b)){
+                        //ajaxReturn("N", "동일한 태그가 존재 합니다.");
+                        return -3;
+                    }
+                }
+            }
+            
+        }
+        
+        $tag_str=implode(" ", $temp);
+        return $tag_str;
+        
+    }
+    
+    
+    /**
+     * 광고 의심 컨텐츠 로그
+     */
+    public function get_ad_content_list(){
+        $query_result=$this->DB->query("select * from ad_content_check");
+        return $query_result->result();
+    }
+    
+    
+    /**
+     * 광고 의심 컨텐츠 로그 제거
+     * @param unknown $idx
+     */
+    public function remove_ad_content($doc_idx, $comm_idx){
+        $this->DB->query("delete from ad_content_check where doc_idx=$doc_idx and comm_idx=$comm_idx");
+    }
+    
+    /**
+     * 광고 의심 컨텐츠 체크
+     * @param unknown $param
+     */
+    public function ad_content_check($content, $doc_idx, $comm_idx=0){
+        //	$spam_attention_list_layout = Notify::getSpamAttentionList();
+        //	$ary_code = array(1=>'주의 도메인', 2=>'주의 도메인', 3=>'링크 변경', 4=>'도메인 포함', 5=>'메일주소 의심', 6=>'관심 링크 포함', 10=>'홍보문구 의심');
+        $allow_host = array('jj0u.com','jjang0u.com', 'youtube.com','youtu.be' ,'org', 'go.kr', 'ac.kr', 'co.uk', 'wiki', 'smarturl.it', 'archive.is', 'op.gg','tv.naver.com','tv.kakao.com','vid.me','twitch.tv','vimeo.com','dailymotion.com','instagram.com',
+            'twitter.com','facebook.com','gfycat.com',
+            'news1.kr', 'newsway.kr', 'mediawatch.kr', 'fomos.kr', 'bgms.kr', 'pandora.tv', 'livedoor.jp', 'amn.kr','ytn.co.kr','lkp.news','search.naver.com',
+            'news.naver.com','cafe.daum.net','news.mt.co.kr','news.khan.co.kr','kwnews.co.kr','www.newsandpost.com','news.kbs.co.kr','news.khan.co.kr','newsis.com',
+            'biz.chosun.com','www.hani.co.kr','news.v.daum.net','www.yna.co.kr','m.ohmynews.com','news.joins.com','www.yna.co.kr','news.jtbc.joins.com','www.donga.com','www.asiae.co.kr','imnews.imbc.com','www.ajunews.com','news.kbs.co.kr'
+            ,'m.naeil.com','www.newspim.com','m.wikitree.co.kr','www.xportsnews.com','m.hani.co.kr','m.yna.co.kr','news.nate.com','news.v.daum.net','news.mt.co.kr','news.khan.co.kr','www.hankookilbo.com','www.hani.co.kr'
+            ,'www.chosun.com','www.incheonilbo.com','www.fnnews.com','www.seoul.co.kr');
+        $type=$comm_idx ? "comm":"doc";
+        
+        
+        
+        if(!isset($this->DB)){
+            $CI= &get_instance();
+            $this->DB=$CI->load->database(DB_NAME_MASTER,TRUE);
+        }
+        
+        $doc=new DOMDocument();
+        @$doc->loadHTML($content);
+        $regdate=time();
+        foreach ($doc->getElementsByTagName('a') as $node) {
+            $parse_href = $parse_val = null;
+            if($node->hasAttribute('href')) {
+                $parse_href = parse_url($node->getAttribute('href'));
+                // 허용 호스트 이외인 경우
+                if(isset($parse_href['host'])) {
+                    $aryhost = explode('.', trim($parse_href['host']));
+                    $cnt=count($aryhost);
+                    
+                    $checked=false;
+                    if($cnt>=4 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)
+                        && !in_array($aryhost[$cnt-4].'.'.$aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                            $checked=TRUE;
+                    }
+                    else if($cnt==3 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) ){
+                        $checked=TRUE;
+                    }
+                    else if($cnt==2 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                        $checked=TRUE;
+                    }
+                    if($checked) {
+                        
+                        
+                        $data=new stdClass();
+                        $data->doc_idx=$doc_idx;
+                        $data->comm_idx=$comm_idx;
+                        $data->val=$parse_href['host'];
+                        $data->type="주의 도메인";
+                        $data->regdate=date("YmdHis");
+                        
+                        
+                        
+                        $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+                        $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+                        
+                        $this->DB->query($sql);
+                        
+                        return ;
+                    }
+                }
+            }
+            
+                   
+            
+            
+            
+            
+            if(strlen($node->nodeValue)) {
+                $parse_val = parse_url($node->nodeValue);
+                // 허용 호스트 이외인 경우
+                if(isset($parse_val['host'])) {
+                    $aryhost = explode('.', trim($parse_val['host']));
+                    $cnt=count($aryhost);
+                    $checked=false;
+                    if($cnt>=4 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)
+                        && !in_array($aryhost[$cnt-4].'.'.$aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                            $checked=TRUE;
+                    }
+                    else if($cnt==3 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) ){
+                        $checked=TRUE;
+                    }
+                    else if($cnt==2 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                        $checked=TRUE;
+                    }
+                    if($checked) {
+                       
+                        
+                        $data=new stdClass();
+                        $data->doc_idx=$doc_idx;
+                        $data->comm_idx=$comm_idx;
+                        $data->val=$parse_href['host'];
+                        $data->type="주의 도메인";
+                        $data->regdate=date("YmdHis");
+                        
+                        $val=$this->DB->escape($parse_href['host']);
+                        
+                        $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+                        $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+                        
+                        $this->DB->query($sql);
+                        return ;
+                    }
+                }
+            }
+            
+            
+            
+            // href 와 node value 의 도메인이 다른 경우
+            if(!is_null($parse_href) && !is_null($parse_val) && isset($parse_href['host'], $parse_val['host']) && trim($parse_href['host']) != trim($parse_val['host'])) {
+                
+                
+                $data=new stdClass();
+                $data->doc_idx=$doc_idx;
+                $data->comm_idx=$comm_idx;
+                $data->val=$parse_href['host'];
+                $data->type="링크 변경";
+                $data->regdate=date("YmdHis");
+                
+                
+                
+                $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+                $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+                
+                $this->DB->query($sql);
+                return ;
+            }
+            
+        }
+        
+        
+        // http://gall.dcinside.com/board/view/?id=xxxxxxxxxxxxxxxxxxxxx
+        // http://gall.dcinside.com/ani1_new1/4670945
+        /*
+        if(stripos($param->content, 'gall.dcinside.com/') !== FALSE) {
+            
+            if(!$isUpdate){
+                $this->DB->query("insert into _ad_content_check (document_srl,comment_srl, val, type, regdate)
+						values({$param->document_srl},{$param->comment_srl},'http://gall.dcinside.com','관심 링크 포함',$regdate) ");
+            }else{
+                $this->DB->query("update _ad_content_check  set comment_srl={$param->comment_srl}, type='관심 링크 포함',
+				val='http://gall.dcinside.com', regdate=$regdate where document_srl={$param->document_srl}");
+            }
+            return ;
+        }
+        */
+        // https://twitter.com/xxxxxxx/status/xxxxxxxxxxxxxxxxxxxxxxx
+        /*
+         if(stripos($obj->content, 'twitter.com/') !== FALSE) {
+         $this->putSpamMember($obj, $type, 6, 'http://twitter.com');
+         return new Object();
+         }
+         */
+        
+        // http://goo.gl/xxxxxxx
+        $regex =  '/goo\.gl\/[a-zA-Z0-9]+/i';
+        $matches = array();
+        if(preg_match($regex, $content, $matches)) {
+            
+            
+            $data=new stdClass();
+            $data->doc_idx=$doc_idx;
+            $data->comm_idx=$comm_idx;
+            $data->val=$matches[0];
+            $data->type="관심 링크 포함";
+            $data->regdate=date("YmdHis");
+            
+            
+            
+            $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+            $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+            
+            $this->DB->query($sql);
+            return ;
+        }
+        
+        
+        /*
+        // 카톡아이디
+        $regex =  '/카톡.*아이디/i';
+        $matches = array();
+        if(preg_match($regex, $param->content, $matches)) {
+            $val=$this->DB->escape($matches[0]);
+            if(!$isUpdate){
+                $this->DB->query("insert into _ad_content_check (document_srl,comment_srl, val, type, regdate)
+					values({$param->document_srl},{$param->comment_srl},{$val},'홍보문구 의심',$regdate) ");
+            }else{
+                $this->DB->query("update _ad_content_check  set comment_srl={$param->comment_srl}, type='홍보문구 의심',
+				val={$val}, regdate=$regdate where document_srl={$param->document_srl}");
+            }
+            return ;
+        }
+        
+        // 친목방
+        $regex =  '/친목.*방/i';
+        $matches = array();
+        if(preg_match($regex, $param->content, $matches)) {
+            $val=$this->DB->escape($matches[0]);
+            if(!$isUpdate){
+                $this->DB->query("insert into _ad_content_check (document_srl,comment_srl, val, type, regdate)
+					values({$param->document_srl},{$param->comment_srl},{$val},'홍보문구 의심',$regdate) ");
+            }else{
+                $this->DB->query("update _ad_content_check  set comment_srl={$param->comment_srl}, type='홍보문구 의심',
+				val={$val}, regdate=$regdate where document_srl={$param->document_srl}");
+            }
+            return ;
+        }
+        
+        // 레어서버
+        $regex =  '/레어서버/i';
+        $matches = array();
+        if(preg_match($regex, $param->content, $matches)) {
+            $val=$this->DB->escape($matches[0]);
+            if(!$isUpdate){
+                $this->DB->query("insert into _ad_content_check (document_srl,comment_srl, val, type, regdate)
+					values({$param->document_srl},{$param->comment_srl},{$val},'홍보문구 의심',$regdate) ");
+            }else{
+                $this->DB->query("update _ad_content_check  set comment_srl={$param->comment_srl}, type='홍보문구 의심',
+				val={$val}, regdate=$regdate where document_srl={$param->document_srl}");
+            }
+            return ;
+        }*/
+        
+        // 웹하드
+        /*
+         $regex =  '/웹하드/i';
+         $matches = array();
+         if(preg_match($regex, $obj->content, $matches)) {
+         $this->putSpamMember($obj, $type, 10, $matches[0]);
+         return new Object();
+         }
+         */
+        
+        // 쿠팡 홍보 (2015-08-06 최근 잦은 광고)
+        /*
+         $regex =  '/쿠팡/i';
+         $matches = array();
+         if(preg_match($regex, $obj->content, $matches)) {
+         $this->putSpamMember($obj, $type, 10, $matches[0]);
+         return new Object();
+         }
+         */
+        
+        
+        
+        
+        
+        // remove all A tags
+        $list = $doc->getElementsByTagName("a");
+        while($list->length > 0) {
+            $node = $list->item(0);
+            $node->parentNode->removeChild($node);
+        }
+        
+        // remove all IMG tags
+        $list = $doc->getElementsByTagName("img");
+        while($list->length > 0) {
+            $node = $list->item(0);
+            $node->parentNode->removeChild($node);
+        }
+        
+        $html = $doc->saveHTML();
+        
+        // A 태그가 없는 경우 (대부분의 댓글은 아래에 해당)
+        $regex =  '/\b(?:(?:https?|ftps?):\/\/|www\.)[-a-z0-9+&@#\/%?=~_|!:,.;]*[-a-z0-9+&@#\/%=~_|]/i';
+        $matches = array();
+        if(preg_match_all($regex, $html, $matches)) {
+            foreach($matches[0] AS $url) { 
+                if(stripos($url,"http://")!==false || stripos($url,"https://")!==false || stripos($url,"ftp://")!==false || stripos($url,"ftps://")!==false){
+                    $parse_url = parse_url($url);
+                }else{
+                    $parse_url = parse_url("http://".$url);
+                }
+                
+                if(isset($parse_url['host'])) {
+                    $aryhost = explode('.', trim($parse_url['host']));
+                    
+                    $cnt=count($aryhost);
+                    $checked=false;
+                    if($cnt>=4 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)
+                        && !in_array($aryhost[$cnt-4].'.'.$aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                            $checked=TRUE;
+                    }
+                    else if($cnt==3 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-3].'.'.$aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host) ){
+                        $checked=TRUE;
+                    }
+                    else if($cnt==2 && !in_array($aryhost[$cnt-1], $allow_host) && !in_array($aryhost[$cnt-2].'.'.$aryhost[$cnt-1], $allow_host)){
+                        $checked=TRUE;
+                    }                    
+                    
+                    if($checked) {                  
+                        
+                        $data=new stdClass();
+                        $data->doc_idx=$doc_idx;
+                        $data->comm_idx=$comm_idx;
+                        $data->val=$url;
+                        $data->type="도메인 포함";
+                        $data->regdate=date("YmdHis");
+                        
+                        
+                        
+                        $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+                        $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+                        
+                        $this->DB->query($sql);
+                        return ;
+                    }
+                }
+            }
+            
+        }
+        
+        // 댓글만 체크
+        if($type == 'comm') {
+            $regex =  '/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b/i';
+            $matches = array();
+            if(preg_match($regex, $content, $matches)) {
+                
+                
+                $data=new stdClass();
+                $data->doc_idx=$doc_idx;
+                $data->comm_idx=$comm_idx;
+                $data->val=$matches[0];
+                $data->type="메일주소 의심";
+                $data->regdate=date("YmdHis");
+                
+                
+                
+                $sql=$this->DB->set($data)->get_compiled_insert("ad_content_check");
+                $sql=$sql." on duplicate key update val=".$this->DB->escape($data->val);
+                
+                $this->DB->query($sql);
+                return ;
+            }
+        }
+    }
+}

@@ -1,0 +1,21 @@
+<?php namespace App\Models;
+use CodeIgniter\Model;
+
+class Sms_book_groupModel extends Model {
+  protected $DBGroup = 'default';
+
+  protected $table = 'SMS_BOOK_GROUP';
+  protected $primaryKey = 'IDX';   
+  protected $useAutoIncrement = true;  
+  protected $useTimestamps  = true;
+  protected $allowCallbacks = true;
+  // protected $validationRules    = [];
+  // protected $validationMessages = [];
+  // protected $skipValidation     = false;  
+  protected $returnType   = 'array';
+  protected $createdField = 'CREATED_AT';
+  protected $updatedField = 'UPDATED_AT';
+  protected $useSoftDeletes = false; //false
+  protected $deletedField  = 'DELETED_AT';
+  protected $allowedFields = ['bg_no','bg_name','bg_count','bg_member','bg_nomember','bg_receipt','bg_reject','UPDATED_AT','DELETED_AT'];
+}

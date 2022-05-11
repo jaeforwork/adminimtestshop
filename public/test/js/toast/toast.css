@@ -1,0 +1,77 @@
+@CHARSET "UTF-8";
+/* 토스트 */
+
+
+.toast_component {
+    border: 1px solid #dfdfdf;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px 0 rgba(0,0,0,.1);
+    background:#fff;
+    z-index:100001;
+    position:fixed;
+    left:0%;
+    top:0%;
+    min-width:260px;
+    max-width:85%;
+}
+.toast_comp-box {
+    position: relative;
+    padding: 20px;
+}
+
+
+.toast_comp-box h3 {
+    text-align: center;
+    font-family: "Noto Sans KR", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+}
+
+.toast_component .comp-desc {
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 0;
+    line-height: 1.5;
+    word-break: break-all;
+    word-wrap: break-word;
+}
+
+.toast_component .btn-wrap {
+    height: 40px;
+    line-height: 40px;
+    border-top: 1px solid #d8d8d8;
+}
+
+.toast_component .btn-wrap > a {
+    display: block;
+    position: relative;
+    float: left;
+    width: 100%;
+    text-align: center;
+    color: #333;
+}
+.toast-choose .btn-wrap > a {
+    width: 50%;
+}
+
+.toast-choose .btn-wrap > a::before {
+    content: "";
+    display: inline-block;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    margin-top: -6px;
+    width: 1px;
+    height: 12px;
+    background: #e7e7e7;
+}
+
+.toast-choose .btn-wrap > a:first-child::before {
+    display: none;
+}
+
+.toast_component .btn-wrap > a:focus {
+	border:0;
+	outline:none;
+}

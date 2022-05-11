@@ -1,0 +1,373 @@
+<?php
+
+namespace App\Libraries;
+
+use PHPImageWorkshop\ImageWorkshop; // Use the namespace of ImageWorkshop
+use GifFrameExtractor\GifFrameExtractor;
+use GifCreator\GifCreator;
+
+
+
+class Filelib{
+    public function getUploadSavePath($type)
+    {
+        
+        $regdate = date("Ym");
+        
+        
+        return "/data/$type/$regdate/".date("d")."/";
+        
+    }
+    
+    public function get_size($source){
+        $info = getimagesize($source);
+        return $info;
+    }
+    
+    
+    
+    
+    public function compress($source, $destination, $quality, $stamp=FALSE) {
+        @ini_set('gd.jpeg_ignore_warning', 1);
+        $info = getimagesize($source);
+        if($stamp){
+            $stampImage=imagecreatefrompng(APPPATH.'stamp/watermark.png');
+            if($stampImage){
+                $stampWidth=imagesx($stampImage);
+                $stampHeight=imagesy($stampImage);
+            }
+        }
+        if ($info['mime'] == 'image/jpeg'){
+            $image = @imagecreatefromjpeg($source);
+            
+            $exif = @exif_read_data($source);
+            if($exif && !empty($exif['Orientation'])) {
+                switch($exif['Orientation']) {
+                    case 8:
+                        // '270';
+                        $image = imagerotate($image,90,0);
+                        break;
+                    case 3:
+                        // '180';
+                        $image = imagerotate($image,180,0);
+                        break;
+                    case 6:
+                        //echo '90';
+                        $image = imagerotate($image,-90,0);
+                        break;
+                }
+            }
+            if(isset($stampImage)){
+                $imgWidth=imagesx($image);
+                $imgHeight=imagesy($image);
+                if($stamp=="CT"){//중앙
+                    $dst_x=($imgWidth- $stampWidth)/2;
+                    $dst_y=($imgHeight- $stampHeight)/2;
+                }else if($stamp=="RB"){//우측 하단
+                    $dst_x=$imgWidth - $stampWidth-10;
+                    $dst_y=$imgHeight - $stampHeight-10;
+                }else if($stamp=="RT"){//우측 상단
+                    $dst_x=$imgWidth - $stampWidth-10;
+                    $dst_y=10;
+                }else if($stamp=="LB"){//좌측 하단
+                    $dst_x=10;
+                    $dst_y=$imgHeight - $stampHeight-10;
+                }else if($stamp=="LT"){//좌측 상단
+                    $dst_x=10;
+                    $dst_y=10;
+                }
+                if($dst_x){
+                    imagecopy($image, $stampImage, $dst_x, $dst_y, 0, 0, $stampWidth, $stampHeight);
+                }
+                return imagejpeg($image,$destination,$quality);
+            }else{
+                return imagejpeg($image, $destination, $quality);
+            }
+            //$img= imagejpeg($image, $destination, $quality);
+        }else if($info['mime'] == 'image/gif'){
+            if($stamp){
+                return $this->add_watermark($source,$destination);
+            }
+        }else if($info['mime'] == 'image/png'){
+            if(isset($stampImage)){
+                $image=imagecreatefrompng($source);
+                $imgWidth=imagesx($image);
+                $imgHeight=imagesy($image);
+                if($stamp=="CT"){//중앙
+                    $dst_x=($imgWidth- $stampWidth)/2;
+                    $dst_y=($imgHeight- $stampHeight)/2;
+                }else if($stamp=="RB"){//우측 하단
+                    $dst_x=$imgWidth - $stampWidth-10;
+                    $dst_y=$imgHeight - $stampHeight-10;
+                }else if($stamp=="RT"){//우측 상단
+                    $dst_x=$imgWidth - $stampWidth-10;
+                    $dst_y=10;
+                }else if($stamp=="LB"){//좌측 하단
+                    $dst_x=10;
+                    $dst_y=$imgHeight - $stampHeight-10;
+                }else if($stamp=="LT"){//좌측 상단
+                    $dst_x=10;
+                    $dst_y=10;
+                }
+                if($dst_x){
+                    imagealphablending($image, true);
+                    imagesavealpha($image, true);
+                    imagecopy($image, $stampImage, $dst_x, $dst_y, 0, 0, $stampWidth, $stampHeight);
+                }
+                return imagepng($image,$destination);
+            }
+        }
+        
+        return false;
+        
+        
+    }
+    
+    public function compress_old($source, $destination, $quality, $stamp=FALSE) {
+        @ini_set('gd.jpeg_ignore_warning', 1);
+        $info = getimagesize($source);
+        
+        if ($info['mime'] == 'image/jpeg'){
+            $image = @imagecreatefromjpeg($source);
+            
+            $exif = @exif_read_data($source);
+            if($exif && !empty($exif['Orientation'])) {
+                switch($exif['Orientation']) {
+                    case 8:
+                        // '270';
+                        $image = imagerotate($image,90,0);
+                        break;
+                    case 3:
+                        // '180';
+                        $image = imagerotate($image,180,0);
+                        break;
+                    case 6:
+                        //echo '90';
+                        $image = imagerotate($image,-90,0);
+                        break;
+                }
+            }
+            
+            return imagejpeg($image, $destination, $quality);
+            
+            //$img= imagejpeg($image, $destination, $quality);
+        }else if($info['mime'] == 'image/gif'){
+            if($stamp){
+                return $this->add_watermark($source,$destination);
+            }
+        }else if($info['mime'] == 'image/png'){
+            
+        }
+        
+        return false;
+        
+        
+    }
+    
+    public function make_thumb($org_path){
+        $pos=strrpos($org_path, "/");
+        $path=substr($org_path, 1,$pos);
+        $name=substr($org_path, $pos+1);
+        //echo $path." ".$name." ".$org_path;
+        $out_path=FCPATH.$path.$name."_thumb.jpg";
+        
+        if(file_exists($out_path) ){
+            return "/".$path.$name."_thumb.jpg";
+        }
+        @ini_set('gd.jpeg_ignore_warning', 1);
+        $source=FCPATH.$org_path;
+        $info = @getimagesize($source);
+        
+        if ($info['mime'] == 'image/jpeg'){
+            $image = @imagecreatefromjpeg($source);
+        }else if($info['mime'] == 'image/gif'){
+            $image=@imagecreatefromgif($source);            
+        }else if($info['mime'] == 'image/png'){
+            $image=@imagecreatefrompng($source);
+            
+        }else{
+            //exit($info['mime']);
+            return $org_path;
+        }
+        
+        $imgWidth=imagesx($image);
+        $imgHeight=imagesy($image);
+        $max_size=360;
+        if($imgWidth<=$max_size || $imgHeight<=$max_size){
+            $new_width=$imgWidth;
+            $new_height=$imgHeight;
+        }else{
+            $new_width=$max_size;
+            $r=$max_size / $imgWidth;
+            $new_height=intval($r * $imgHeight);
+        }
+        $im = imagecreatetruecolor($new_width, $new_height);
+        $bg=imagecolorallocate($im, 255, 255, 255);
+        imagefill($im,0,0,$bg);
+                
+        imagecopyresized ( $im , $image , 0 , 0 , 0 , 0 , $new_width , $new_height , $imgWidth , $imgHeight ) ;
+        //$dst=imagescale($image, $new_width);
+        //$dst=imagecopyresized ()
+        
+        if(imagejpeg($im, $out_path)){
+            
+            return "/".$path.$name."_thumb.jpg";
+        }else{
+            return $org_path;
+        }
+        
+    }
+    
+    public function file_exist($org_path){
+        $pos=strrpos($org_path, "/");
+        $path=substr($org_path, 1,$pos);
+        $name=substr($org_path, $pos+1);
+        
+        $out_path=FCPATH.$path.$name."_thumb.jpg";
+        
+        return file_exists($out_path);
+    }
+    
+    public function move_user_icon($temp_path){
+        if(!file_exists(FCPATH.$temp_path)){
+            return FALSE;
+        }
+        
+        $user_icon_path=str_replace("_temp", "", $temp_path);
+        $str_pos=strrpos($user_icon_path, "/");
+        if($str_pos===FALSE){
+            return FALSE;
+        }
+        
+        $dir=substr($user_icon_path,0, $str_pos);
+       
+        if(!is_dir(FCPATH.$dir)){
+            if(!mkdir(FCPATH.$dir,0777,TRUE)){
+                return FALSE;
+            }
+        }
+        
+        if(rename(FCPATH.$temp_path, FCPATH.$user_icon_path)){            
+            return $user_icon_path;
+        }
+        else{
+            return FALSE;
+        }
+                
+    }
+    
+    public function is_ani_gif($source) {
+        
+        /*
+        if(!($fh = @fopen($filename, 'rb'))){
+            return false;
+        }
+        $count = 0;
+        //an animated gif contains multiple "frames", with each frame having a
+        //header made up of:
+        // * a static 4-byte sequence (\x00\x21\xF9\x04)
+        // * 4 variable bytes
+        // * a static 2-byte sequence (\x00\x2C) (some variants may use \x00\x21 ?)
+        
+        // We read through the file til we reach the end of the file, or we've found
+        // at least 2 frame headers
+        while(!feof($fh) && $count < 2) {
+            $chunk = fread($fh, 1024 * 1024); //read 100kb at a time
+            $count += preg_match_all('#\x00\x21\xF9\x04.{4}\x00(\x2C|\x21)#s', $chunk, $matches);
+            
+        }
+        
+        fclose($fh);
+        return $count > 1;*/
+        return GifFrameExtractor::isAnimatedGif($source);
+    }
+    
+    public function getDirFiles($dir, &$results = array()) {
+        $files = scandir($dir);
+        
+        foreach ($files as $value) {
+            if($value=="." || $value=="..")continue;
+            $path = realpath($dir . DIRECTORY_SEPARATOR . $value);
+            if (!is_dir($path)) {
+                $results[] = $path;
+            }else{                             
+                return $this->getDirFiles($path,$results);               
+            }
+        }
+        
+        return $results;
+    }
+    
+    public function delTree($dir)
+    {
+        $files = array_diff(scandir($dir), array('.', '..'));
+        
+        foreach ($files as $file) {
+            (is_dir("$dir/$file")) ? $this->delTree("$dir/$file") : unlink("$dir/$file");
+        }
+        
+        return rmdir($dir);
+    }
+    
+    
+    public function get_mime_type($path){
+        $regexp = '/^([a-z\-]+\/[a-z0-9\-\.\+]+)(;\s.+)?$/';
+        $finfo = @finfo_open(FILEINFO_MIME);
+        if (is_resource($finfo)) // It is possible that a FALSE value is returned, if there is no magic MIME database file found on the system
+        {
+            $mime = @finfo_file($finfo, $path);
+            finfo_close($finfo);
+            
+            /* According to the comments section of the PHP manual page,
+             * it is possible that this function returns an empty string
+             * for some files (e.g. if they don't exist in the magic MIME database)
+             */
+            if (is_string($mime) && preg_match($regexp, $mime, $matches))
+            {
+                
+                return $matches[1];
+            }
+        }
+        return FALSE;
+    }
+     
+    public function add_watermark($source, $destination){
+        
+        if (GifFrameExtractor::isAnimatedGif($source)) { // check this is an animated GIF            
+            $gfe = new GifFrameExtractor();
+            $frames = $gfe->extract($source);
+            $watermarkLayer = ImageWorkshop::initFromPath(APPPATH.'stamp/hoo_watermark.png');
+            $retouchedFrames = array();
+            
+            // For each frame, we add a watermark and we resize it
+            foreach ($frames as $frame) {
+                
+                // Initialization of the frame as a layer
+                $frameLayer = ImageWorkshop::initFromResourceVar($frame['image']);
+                
+                $frameLayer->resizeInPixel($frameLayer->getWidth(), null, true); // Resizing
+                $frameLayer->addLayerOnTop($watermarkLayer, 10, 10, 'RB'); // Watermarking
+                
+                $retouchedFrames[] = $frameLayer->getResult();
+                
+            }
+            
+            $gc = new GifCreator();
+            $gc->create($retouchedFrames, $gfe->getFrameDurations(), 0);
+            return file_put_contents($destination, $gc->getGif());
+            
+        }else{
+            $sourceLayer=ImageWorkshop::initFromPath($source);
+            $watermarkLayer = ImageWorkshop::initFromPath(APPPATH.'stamp/hoo_watermark.png');
+            $sourceLayer->addLayerOnTop($watermarkLayer, 10, 10, 'RB');
+            $sourceLayer->resizeInPixel($sourceLayer->getWidth(), null, true);
+            
+            
+            $file_info = pathinfo($destination);
+            
+            $sourceLayer->save($file_info['dirname'], $file_info['basename']);
+            return TRUE;
+            
+        }
+    }
+}
