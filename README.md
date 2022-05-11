@@ -257,6 +257,7 @@ MVC 패턴 유지. Model구조 유지.
   .env url 수정
   /app/Config/App.php  : URL 수정
   /app/Config/Database.php  : DB접속 정보 수정
+  /app/Config/Routes.php  : Routes 정보 수정
 
   폴더 775 , 파일 755, write folder 707
 ## 초기설정 시 ##
