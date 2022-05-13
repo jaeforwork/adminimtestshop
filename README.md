@@ -260,5 +260,18 @@ MVC 패턴 유지. Model구조 유지.
   /app/Config/Routes.php  : Routes 정보 수정
   /app/Config/Encryption.php : 26번째 줄  public $key 변경
   
-  폴더 775 , 파일 755, write folder 707
+  write folder 707 : 하위디렉토리 폴더 포함
+
+  nginx 설정 복사
+  리로드
+  
+  - VISIT 통계 디테일 하게 구현, 필드명 대문자, 추가 해서 더 디테일 하게ㅔ
+  - 테이블전체 FOREIGN_KEY 설정
+    TRANSPORT(TR_IDX), TRANSPORT_END(TR_IDX), MEMBER(USER_IDX), PAYMENT(TR_IDX)
+    fk_본테이블명_참조키테이블명_참조키 (예 :  fk_MEMBER_CONFIG_MEMBER_USER_IDX )
+  - 소스 정리(변수정리, 순서정리, 통일화)
+  - common_helper.php function 가나다 순으로 정렬
+  - DB 대소문자 구별 위한 세팅 정리 UTF8BIN
+  - 도큐먼트 만들기 
+  - ADMIN_IDX 로 통일화
 ## 초기설정 시 ##
